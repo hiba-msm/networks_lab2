@@ -1,0 +1,5 @@
+# Client window and lobby QR code. The server needs none of these.
+pygame-ce==2.5.8
+qrcode==8.2
+# Report charts only.
+matplotlib==3.11.2
