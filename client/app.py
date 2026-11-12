@@ -34,7 +34,7 @@ class TextField:
 
 class App:
     def __init__(self, transport_class, transport_name, host, port, name="", event_mode=False,
-                 skin="arcade", mute=False):
+                 skin="arcade", mute=False, music=False):
         pygame.init()
         self.window = pygame.display.set_mode((W, H))
         pygame.display.set_caption("Drag Race")
@@ -42,7 +42,7 @@ class App:
         # art is drawn at 1x; the broadcast look is drawn at 2x and smoothed.
         self.draw_prefix = "arcade_" if skin == "arcade" else "draw_"
         self.canvas = Canvas(self.window, 1 if skin == "arcade" else 2)
-        self.sound = Sound(mute)
+        self.sound = Sound(mute, music)
         self.heard = {}            # what update_sound() saw last frame, to notice changes
         self.transport_class = transport_class
         self.transport_name = transport_name
@@ -236,7 +236,7 @@ class App:
             sound.play("finish")
         heard.update(lights=lights_out, stalled=r.car.stalled, order=order, over=r.result is not None)
 
-        # Engine: idles on the grid, then follows our own press rate. Bass line: only while racing.
+        # Engine: idles on the grid, then follows our own press rate. Bass line (--music): only while racing.
         sound.engine(sum(r.car.window) / PRESS_WINDOW_SECONDS if racing else 0)
         sound.music(racing)
 

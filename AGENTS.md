@@ -177,6 +177,7 @@ python -m client --transport udp --host 127.0.0.1 --port 5055 --name Ada
 python -m client --transport tcp --host 127.0.0.1 --port 5055 --name Ada
 python -m client --transport udp --host 127.0.0.1 --event-mode     # the naive input design
 python -m client --transport udp --skin broadcast --mute           # the plain look, sound off
+python -m client --transport udp --music                           # adds the bass line (off by default)
 python -m client.sound                                             # plays every sound in turn
 
 # tests: run all three before saying anything works

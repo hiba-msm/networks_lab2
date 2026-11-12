@@ -55,6 +55,7 @@ def engine_loop(hz):
 
 
 # The bass line: sixteen eighth-notes in A minor, looped for the whole race.
+# Off unless the client is started with --music.
 BASS_HZ = [55, 55, 110, 55, 65.4, 65.4, 130.8, 65.4, 73.4, 73.4, 146.8, 73.4, 82.4, 82.4, 98, 110]
 
 RECIPES = {
@@ -69,8 +70,9 @@ RECIPES = {
 
 
 class Sound:
-    def __init__(self, muted=False):
+    def __init__(self, muted=False, music=False):
         self.muted = muted
+        self.music_enabled = music  # the bass line is opt-in; every other sound is on by default
         self.ready = False        # False on a machine with no audio device: every call does nothing
         self.engine_step = None   # which engine loop is playing, None for silence
         self.music_on = False
@@ -111,8 +113,8 @@ class Sound:
             self.engine_channels[0].play(self.engines[step], loops=-1, fade_ms=FADE_MS)
 
     def music(self, on):
-        """Call every frame: the bass line plays while on is true."""
-        if not self.ready or self.muted or on == self.music_on:
+        """Call every frame: with --music, the bass line plays while on is true."""
+        if not self.music_enabled or not self.ready or self.muted or on == self.music_on:
             return
         self.music_on = on
         if on:
@@ -130,7 +132,7 @@ class Sound:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    sound = Sound()
+    sound = Sound(music=True)
     assert sound.ready, "no audio device"
     for name in RECIPES:
         print(name)

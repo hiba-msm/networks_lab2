@@ -198,7 +198,7 @@ and played by `pygame.mixer` at 22050 Hz mono. Hear them all with
 | Stall | Our engine stalls | Sawtooth sliding from 320 Hz down to 70 Hz over 500 ms. |
 | Overtake | The race order changes | Two rising notes, 660 then 990 Hz. |
 | Finish | The round ends | C, E, G, high C. |
-| Bass line | While the round is running | Sixteen eighth-notes in A minor, square wave, looped. |
+| Bass line | While the round is running, **only with `--music`** | Sixteen eighth-notes in A minor, square wave, looped. |
 
 - **The engine is the key-press feedback:** its pitch follows our own press
   rate, so the ear confirms every press. A press before the lights go out
@@ -206,6 +206,10 @@ and played by `pygame.mixer` at 22050 Hz mono. Hear them all with
 - **Mute:** `--mute` starts silent. `M` toggles on the room, race and result
   screens. On the sign-in and lobby screens `M` is a letter being typed, so it
   does not toggle there. Sound is on by default.
+- **Music is opt-in:** the bass line is off unless the client is started with
+  `--music`. The engine, press click, countdown, stall, overtake and finish
+  sounds carry information about the race and stay on; the bass line carries
+  none, and three clients in one room would each loop it out of step.
 - **No audio device:** `pygame.mixer.init` is wrapped; if it fails the client
   logs one warning and runs silent. (Checked with `SDL_AUDIODRIVER` set to a
   driver that does not exist.)
@@ -241,8 +245,8 @@ Written to be argued with. Most important first.
    paste, copy and the `M` key are unproven by a person.
 2. **Nobody has listened to the sound critically.** The sounds were generated
    and played without error on one laptop; their balance (engine against bass
-   line against clicks) was not tuned by ear. Three clients in one room will
-   play three bass lines that are not in step.
+   line against clicks) was not tuned by ear. With `--music`, three clients in
+   one room play three bass lines that are not in step.
 3. **The ghost is only as visible as the desync is large.** On loopback with
    30% loss it reaches 1.5 to 3 m (16 to 33 px) and is obvious. On a clean
    link it is a white rim a few pixels wide. Both cars are eased by the same

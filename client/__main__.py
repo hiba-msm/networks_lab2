@@ -24,8 +24,9 @@ parser.add_argument("--event-mode", action="store_true",
 parser.add_argument("--skin", choices=["arcade", "broadcast"], default="arcade",
                     help="arcade: pixel art (default). broadcast: the plain timing-screen look")
 parser.add_argument("--mute", action="store_true", help="start with sound off (M toggles it in the game)")
+parser.add_argument("--music", action="store_true", help="add a bass line during the race (off by default)")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s", datefmt="%H:%M:%S")
 App(TRANSPORTS[args.transport], args.transport.upper(), args.host, args.port, args.name, args.event_mode,
-    args.skin, args.mute).run()
+    args.skin, args.mute, args.music).run()
