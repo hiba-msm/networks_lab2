@@ -160,6 +160,12 @@ Each of these looks like something to "clean up". Each is deliberate.
   cannot send a huge count and teleport.
 - **Names stay reserved for 60 s after a disconnect, then free up.** With the
   token, the same player_id is reclaimed; without it the name is "taken".
+- **A stall lasts 1.2 s, not 2.** At 2 s a steady 8 presses/s beat mashing, so
+  the best strategy was not to mash. At 1.2 s one stall at 10/s beats 8/s by
+  about half a second, and two stalls at 12/s do not beat one. Check any
+  change to the heat constants with `python -m tools.heat_sim`.
+- **The bass line is off unless the client is started with `--music`.** Every
+  other sound reports something about the race and is on by default.
 
 ## How to run everything
 
@@ -192,7 +198,7 @@ python preflight.py --public-test --host SERVER_IP    # reachability of both por
 
 # figure generators
 python -m tools.heat_sim --stall-seconds 1.0 1.2 1.5 2.0   # finish time per press rate
-python -m tools.screenshots --transport udp               # also: tcp, and udp --loss 0.3
+python -m tools.screenshots --transport udp               # also: tcp, udp --loss 0.3, udp --skin broadcast
 ```
 
 There is no bot client yet (see status). Until there is, a headless client is
@@ -222,22 +228,20 @@ Update this section as the last step of any work. Last updated: 2026-11-12.
   match, every kind of disconnect.
 - Client: headless core (clock sync, prediction, reconciliation, telemetry) and
   the pygame window (lobby, QR invite, start lights, ghost car, telemetry panel).
-- Arcade skin and sound, on branch `gui-arcade`, not merged into `main` yet:
-  sprite cars, three-layer parallax, position ladder, generated sound,
-  `--skin` and `--mute`. All three suites pass on the branch; a scripted match
-  ran in the real window on both transports at 60 fps (numbers in
-  `docs/design.md`). The frame loop now keeps a fixed 60 Hz timetable.
+- Arcade skin (the default) and sound, merged into `main`: sprite cars,
+  three-layer parallax, position ladder, generated sound, `--skin`, `--mute`
+  and `--music`. A scripted match ran in the real window on both transports
+  at 60 fps (numbers in `docs/design.md`). The broadcast skin is kept as the
+  fallback.
+- Heat balance: the stall is 1.2 s, chosen with `tools/heat_sim.py`.
+- `docs/screenshots/`: 36 PNGs of the current build, every screen in the
+  arcade skin (UDP, TCP, UDP with 30% loss) and in the broadcast skin (UDP).
 - `preflight.py`, local and `--public-test`.
 
 **In progress**
 - A human has not yet played a full match by hand, in either skin. The window
   was driven by a script and checked from screenshots. Typing, CTRL+V, CTRL+C
-  and M are untested by hand, and nobody has judged the sound by ear. Do this
-  on `gui-arcade` before merging it.
-- Heat balance is undecided. With the current 2 s stall, a steady 8 presses/s
-  beats mashing at 9-10/s, so the best strategy is to avoid the mechanic.
-  `python -m tools.heat_sim` shows the table; a shorter stall (about 1.2 s)
-  makes one stall per round pay. Constants are unchanged until the team picks.
+  and M are untested by hand, and nobody has judged the sound by ear.
 - The lobby QR has not been scanned with a phone. The arcade skin draws it
   black on a white panel with a quiet zone; the broadcast skin still draws it
   light-on-dark, which some scanners cannot read.

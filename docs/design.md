@@ -169,7 +169,7 @@ car. On a clean link the two overlap and a thin white rim shows at the nose.
 Under UDP loss the ghost pulls ahead while snapshots are missing and snaps
 back when one arrives. The distance between them on screen is the real desync
 at 11 px per metre; it is never exaggerated. See
-`docs/screenshots/udp_loss30_*`.
+`docs/screenshots/arcade_udp_loss30_*`.
 
 ### Telemetry panel
 
@@ -294,7 +294,19 @@ on screen is added to both skins.
 
 ## Screenshots
 
-`docs/screenshots/` holds every screen in the arcade skin: `udp_*` and `tcp_*`
-on a clean link, `udp_loss30_*` with 30% of server-to-client datagrams
-dropped. Regenerate them after a visual change with
-`python -m tools.screenshots` (see the top of `tools/screenshots.py`).
+`docs/screenshots/` holds 36 PNGs, nine screens from each of four runs. The
+file name states the skin, the transport and the screen:
+
+| Files | Run |
+|---|---|
+| `arcade_udp_*` | Arcade skin, UDP, clean link. |
+| `arcade_tcp_*` | Arcade skin, TCP, clean link. |
+| `arcade_udp_loss30_*` | Arcade skin, UDP, 30% of server-to-client datagrams dropped. |
+| `broadcast_udp_*` | Broadcast skin, UDP, clean link. |
+
+The nine screens are `1_name_empty`, `2_lobby`, `3_room`, `4_lights`,
+`5_race`, `6_race_late`, `7_finish`, `8_result`, `9_back_in_room`.
+
+After a visual change, delete all of them and run the four commands at the
+top of `tools/screenshots.py`, so that no picture of an older build is left
+beside the new ones.

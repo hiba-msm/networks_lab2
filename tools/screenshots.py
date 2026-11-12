@@ -3,12 +3,17 @@
     python -m tools.screenshots --transport udp
     python -m tools.screenshots --transport tcp
     python -m tools.screenshots --transport udp --loss 0.3     ghost cars pulling away
+    python -m tools.screenshots --transport udp --skin broadcast
+
+The committed set is those four runs. Delete docs/screenshots/*.png first, so
+no file from an older build is left beside the new ones.
 
 It plays one real match: a real server on 127.0.0.1, the real client window as
 player "Ada", and two headless clients (client.core.GameClient) as opponents.
-A window opens and the match runs in real time, about 40 seconds. Nine PNGs are
-written, one per screen, named <transport>_<n>_<screen>.png, or
-udp_loss<percent>_<n>_<screen>.png with --loss.
+A window opens and the match runs in real time, about 40 seconds, silently.
+Nine PNGs are written, one per screen. The name states the skin, the transport
+and the screen:  <skin>_<transport>_<n>_<screen>.png, or
+<skin>_udp_loss<percent>_<n>_<screen>.png with --loss.
 
 --loss drops that share of the datagrams the server sends, by wrapping the UDP
 transport's _transmit. It needs --transport udp: the TCP transport has no
@@ -16,6 +21,7 @@ equivalent hook yet.
 """
 
 import argparse
+import os
 import pathlib
 import random
 import threading
@@ -36,6 +42,7 @@ OPPONENTS = {"Bob": 6.2, "Cyrus": 7.6}
 parser = argparse.ArgumentParser(description="Regenerate docs/screenshots")
 parser.add_argument("--transport", choices=sorted(TRANSPORTS), required=True)
 parser.add_argument("--loss", type=float, default=0.0, help="share of server datagrams to drop (udp only)")
+parser.add_argument("--skin", choices=["arcade", "broadcast"], default="arcade")
 parser.add_argument("--out", default="docs/screenshots")
 args = parser.parse_args()
 if args.loss and args.transport != "udp":
@@ -43,7 +50,10 @@ if args.loss and args.transport != "udp":
 
 out = pathlib.Path(args.out)
 out.mkdir(parents=True, exist_ok=True)
-prefix = f"udp_loss{round(args.loss * 100)}" if args.loss else args.transport
+prefix = args.skin + "_" + (f"udp_loss{round(args.loss * 100)}" if args.loss else args.transport)
+# Play the match's sound into SDL's dummy device: the run is silent, and the
+# screens still show the default state (sound on) rather than a muted client.
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 transport_class = TRANSPORTS[args.transport]
 
 listener = transport_class.listen("127.0.0.1", 0)
@@ -54,7 +64,7 @@ server = GameServer(listener)
 threading.Thread(target=server.run, daemon=True).start()
 port = listener.address[1]
 
-app = App(transport_class, args.transport.upper(), "127.0.0.1", port)
+app = App(transport_class, args.transport.upper(), "127.0.0.1", port, skin=args.skin)
 bots = {GameClient(transport_class.connect("127.0.0.1", port)): name for name in OPPONENTS}
 last_press = {bot: 0.0 for bot in bots}
 my_last_press = 0.0
