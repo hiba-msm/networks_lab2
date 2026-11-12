@@ -1,170 +1,300 @@
-# Visual design
+# Visual and sound design
 
-The look is a motorsport timing broadcast (F1 / Formula E timing graphics): a
-dark page, thin rules, small wide-tracked captions, large numerals. It must not
-read as a student pygame project. Everything is drawn procedurally: no sprites,
-no images, no clip art.
+The client has two skins, chosen on the command line:
 
-Code: `client/theme.py` (palette, type, canvas), `client/screens.py` (layout).
+| Flag | Look |
+|---|---|
+| `--skin arcade` (default) | Side-on pixel-art racer in the style of a 16-bit console game: sprite cars on a scrolling road, saturated colours, chunky HUD. |
+| `--skin broadcast` | The earlier look: a dark motorsport timing page drawn with lines and type only. Kept as the fallback; see the last section. |
 
-## Rules
+Both skins show exactly the same information and run the same game. The skin
+changes drawing only: nothing in `client/core.py`, `common/`, `server/` or
+`transport/` knows it exists, and the server needs neither pygame nor any asset.
 
-### Colour
+Code: `client/theme.py` (palettes, fonts, sprite loading, the canvas),
+`client/screens.py` (every screen, once per skin), `client/sound.py` (sound),
+`client/app.py` (which screen is showing, keys, when a sound plays).
 
-| Role | Hex | Use |
+## Assets, sources and licences
+
+Everything is in `assets/`, committed, and loaded by relative path. Nothing is
+downloaded at run time.
+
+| Asset | Files | Source | Licence |
+|---|---|---|---|
+| Kenney "Pixel Vehicle Pack" 1.0 (2019) | `assets/sprites/*.png`: 3 cars, barrier, street light, signs, gantry | https://kenney.nl/assets/pixel-vehicle-pack | CC0 1.0 (public domain). Text in `assets/sprites/Kenney-License.txt`. |
+| Press Start 2P | `assets/fonts/PressStart2P-Regular.ttf` | https://github.com/google/fonts/tree/main/ofl/pressstart2p | SIL Open Font License 1.1. Text in `assets/fonts/PressStart2P-OFL.txt`. |
+| Space Grotesk, JetBrains Mono (broadcast skin) | `assets/fonts/` | Google Fonts | SIL Open Font License 1.1, texts alongside. |
+
+- **One sprite pack only.** Every sprite is from the Kenney pack, unmodified on
+  disk. Only the ten files the game uses are committed.
+- The pack has no backgrounds. The sky, city skyline, hills, road, smoke and
+  panels are drawn by code, at the pack's pixel size and in the pack's
+  colours, so they read as part of the same set.
+- **Sound uses no assets at all**: every sound is generated at start-up.
+
+## Arcade skin
+
+### Palette
+
+Only colours that occur in the pack's sprites (read from the PNGs), so drawn
+shapes cannot clash with sprites. Names are the constants in `theme.py`.
+
+| Name | Hex | Use |
 |---|---|---|
-| Background | `#0D0F12` | The page. Never pure black. |
-| Foreground | `#E8EAED` | Primary text, numerals, the finish line, lit start lights. |
-| Secondary | foreground at 55% (`#85878A`) | Captions, units, hints. |
-| Hairline | foreground at 12% (`#27292C`) | Rules, empty bars, unlit start lights. |
-| Far layer | foreground at 5% (`#181A1D`) | The slow background lines behind the track. |
-| Player 1 | `#4C8DD9` | Lane 1 accent. |
-| Player 2 | `#D98A4C` | Lane 2 accent. |
-| Player 3 | `#5FB88F` | Lane 3 accent. |
+| `INK` | `#2C333A` | Unlit heat blocks, car shadow. |
+| `SLATE` | `#3E4751` | The road, ladder rows, dim leading zeros, unlit start lamps. |
+| `ICE` | `#C8E0FF` | Panel borders, captions, lane dashes, speed lines. |
+| `WHITE` / `BLACK` | `#FFFFFF` / `#000000` | Text / text shadow, panel shadow, QR code. |
+| `RED`, `RED_LIGHT` | `#C03E41`, `#F55C5C` | Player 1, lit start lamps, stall warnings. |
+| `YELLOW`, `YELLOW_LIGHT` | `#DC9C24`, `#FFD83D` | Player 2, titles, the clock, key names, highlighted numbers. |
+| `GREEN`, `GREEN_LIGHT` | `#44B25D`, `#5AE17C` | Player 3, hills, "GO", "ready". |
+| `BLUE`, `BLUE_LIGHT` | `#377DBE`, `#4A9CF0` | Skyline and panel title bars, the sky. |
+| `PAGE`, `PANEL` | `INK` darkened 45% / 15% | Behind the panels / inside a panel. |
 
-- No gradients, no drop shadows, no glow, no outlines around filled shapes.
-- "Transparent" tones are pre-mixed with the background (`mix()` in
-  `theme.py`), because the page is flat and nothing else is ever behind them.
-- An accent means "this player" and nothing else. Do not use accents for
-  decoration, warnings or emphasis.
-- No colours outside this table.
+- A player's colour is the colour of that player's car: lane 1 red, lane 2
+  yellow, lane 3 green (`PLAYER_COLORS`, `CAR_SPRITES`). It marks the car's
+  name tag, ladder row, desync readout and result row.
+- Any other tone must be a `mix()` of two palette colours.
+
+### Scaling rules
+
+- **One sprite pixel is 3 x 3 window pixels (`PX = 3`), everywhere.** Sprites
+  are enlarged once, when loaded, with `pygame.transform.scale`, which is
+  nearest-neighbour. Never `smoothscale` a sprite: it blurs the pixels.
+- Scenery drawn by code is drawn small (one unit per sprite pixel) and
+  enlarged by the same `PX`, so its pixels match the sprites'.
+- **The arcade skin has no supersampling.** The broadcast skin draws at 2x and
+  smooths down; the arcade canvas has scale 1 and draws straight onto the
+  1280 x 720 window (`Canvas(window, 1)`), so nothing is ever filtered.
+- The pixel font is drawn without anti-aliasing and only at sizes that are a
+  multiple of 8 (8, 16, 24, 48, 72), which make whole font pixels of 1, 2, 3, 6
+  and 9 window pixels. Text is therefore finer than the sprites at sizes 8 and
+  16; that is deliberate, the telemetry panel would not fit otherwise.
+- Sprites move in whole window pixels, not whole sprite pixels, so motion is
+  smooth rather than stepping 3 px at a time.
 
 ### Type
 
-| Face | File | Use |
-|---|---|---|
-| Space Grotesk Medium | `assets/fonts/SpaceGrotesk-Medium.ttf` | Captions, names, titles. |
-| JetBrains Mono Regular | `assets/fonts/JetBrainsMono-Regular.ttf` | Every numeral and every code, address and key name. |
+- One face, Press Start 2P, through `ptext()` in `screens.py`: upper case, with
+  a hard black shadow one font pixel down and right.
+- **Tabular figures rule:** every glyph of this face is exactly one em wide,
+  digits included, so no readout shifts sideways when its digits change.
+- Fixed-width readouts keep their leading zeros, drawn dim (`pnumber()`).
+- Text `y` is the baseline, as in the broadcast skin.
 
-- **Tabular figures rule:** anything containing digits that can change is set
-  in the mono face, so readouts do not jitter sideways as digits change. Use
-  `canvas.number()`.
-- Readouts have a fixed width. Pad with leading zeros and pass
-  `dim_zeros=True`, which draws the padding faintly.
-- Captions are upper case, 11 px, tracked 0.14 em, secondary colour. Use
-  `canvas.label()`.
-- Text `y` is the baseline, so a caption and a numeral on one line share a baseline.
-- Both fonts are loaded with `pygame.font.Font` from the repo. Never fall back
-  to a system font.
+### Layout (race screen)
 
-### Rendering
+- Top strip: round (left), race clock (centre), transport, address and our
+  name or the latest notice (right).
+- Track view x = 272..1264, y = 84..447: 126 px of scenery above three lanes of
+  78 px. There are always three lanes of road, also with two players.
+- Scale 11 px per metre. The leader sits 60% of the way across; the world scrolls.
+- Position ladder x = 16..256, beside the track.
+- "Your car" panel bottom left, "Link telemetry" panel bottom right.
+- Panels: `ICE` border one sprite pixel thick, hard black shadow, blue title bar.
 
-- The whole frame is drawn on a 2560 x 1440 surface (2x) and scaled to the
-  1280 x 720 window with `pygame.transform.smoothscale` once per frame. That
-  anti-aliases every edge. Never draw directly on the window.
-- All coordinates in `screens.py` are window pixels; the canvas multiplies by 2.
-- **Every animated value is interpolated, never snapped:**
-  `current += (target - current) * 0.2` per frame (`EASE` in `theme.py`,
-  `canvas.ease(key, target)`). Counters (packets, presses) are exact values and
-  are not eased.
+### Motion
 
-### Layout grid
+- **Every animated value is interpolated, never snapped:** car positions, the
+  camera, speeds, heat, gaps and desync go through `canvas.ease()`
+  (`current += (target - current) * 0.2` per frame). Counters are exact.
+- **Parallax, three layers,** all tied to the leader's distance:
+  the road, barrier, street lights, signs and gantries move 1:1 with the
+  track; the hills at 0.35 of that; the city skyline and clouds at 0.10.
+- **Cars:** the body bobs one sprite pixel every 3 m travelled, so the bob
+  quickens with speed, and three speed lines trail behind, longer the faster.
+  The pack has no wheel frames, so the wheels do not turn.
+- **Stall:** the car shakes 3 px left and right at 10 Hz and a column of five
+  smoke puffs rises from the bonnet; the ladder row and the driver panel say
+  STALL in red. A car on the finish line is drawn stopped.
+- **Track furniture:** a gantry every 50 m with the distance above it, the
+  last one marked FINISH over a chequered line.
+- **Start lights:** five red lamps in a panel over the track go out one at a
+  time, 700 ms apart, the last at `MATCH_START`'s timestamp on the estimated
+  server clock, so all clients agree. Then all five show green with "GO!" for
+  600 ms.
+- **Other screens** (sign-in, lobby, result) carry a strip of the same scenery
+  scrolling at 14 m/s with cars on it; the room screen shows each seat's car.
 
-- Page 1280 x 720, margin 48 px on all sides.
-- Header: caption baseline 44, title baseline 78, rule at y = 100.
-- Key hints: baseline 688.
-- Race screen:
-  - Lanes start at y = 116, each 112 px high, separated by hairlines.
-  - Lane gutter x = 48..264: accent bar, position, name, speed, heat bar.
-  - Track x = 264..1232. Scale 11 px per metre. The leader sits 60% of the way
-    across; the camera follows the leader and the track scrolls.
-  - Whole-track strip under the lanes.
-  - Rule at y = 500. Below it, driver panel on the left, vertical rule at
-    x = 632, telemetry panel from x = 664 in 4 columns of 142 px, rows 44 px apart.
-- Generous empty space is intended. Do not fill it.
+### Position ladder
 
-### Motion and the track
+The most important element for an audience: position changes must be readable
+from across a room.
 
-- Cars are long flat shapes with a tapered nose and a short trail of four
-  fading dashes whose length follows speed. They are not illustrations.
-- Two layers scroll: track ticks (every 10 m, taller and numbered every 50 m)
-  at full speed, and faint vertical lines at half speed for depth.
-- A stalled car is drawn at 40% of its accent.
-- Start: five lights in the header go out one at a time, 700 ms apart, each
-  fading over 250 ms; the last goes out at `MATCH_START`'s timestamp on the
-  estimated server clock, so all clients agree.
-- Finish: the clock freezes at the winner's time. Each other lane counts up to
-  its gap in milliseconds.
+- One row per player, in race order, left of the track. Place numbers 1, 2, 3
+  are fixed; the rows move.
+- Order: during a round, by the newest authoritative distance (a tie keeps
+  lane order); after it, the server's finish order. `race_order()` in
+  `screens.py`; the overtake sound uses the same function.
+- **On an overtake the two rows slide past each other over 250 ms**
+  (`LADDER_SLIDE_MS`), eased in and out with `t * t * (3 - 2t)`. A slide
+  interrupted by another overtake continues from where the row is.
+- **The row that gained a place flashes white, fading over 400 ms**
+  (`LADDER_FLASH_MS`), and is drawn on top while the rows cross.
+- A row shows: the player's colour, name, gap, speed (or STALL), a YOU mark,
+  and a ten-block heat bar.
+- **Gap, in seconds:** the leader shows LEADER. Others show how long ago the
+  leader was where they are now, at the leader's average speed so far:
+  `elapsed * (1 - own distance / leader distance)`. After the round: the
+  winner's time, everyone else's gap to it from the server's times, or DNF.
+
+### Heat
+
+Heat is a row of blocks: green up to 60%, yellow to 80%, red above. When the
+last block lights, the engine stalls. Twenty blocks for our own car in the
+driver panel, ten per player in the ladder.
+
+### Lobby and QR
+
+The room code is drawn at 72 px. The invite QR is black on a white panel with
+the standard four-module quiet zone, each module a whole number of pixels.
 
 ## The two diagnostic visuals
 
 These are the selling point of the demo. Do not remove, hide or restyle them
-into a debug overlay.
+into a debug overlay. Both skins have both.
 
 ### Ghost car
 
 Every car is drawn twice:
 
 - **Solid** at the server-authoritative position: the newest snapshot.
-- **Outline** at the client's predicted position: for our own car the local
+- **Ghost** at the client's predicted position: for our own car the local
   simulation, for others the newest snapshot carried forward at its speed.
 
-On a clean link they overlap. Under UDP loss the outline pulls ahead while
-snapshots are missing and returns when one arrives. It must stay visible
-against both the page and the solid car.
+In the arcade skin the ghost is the car's own sprite at 40% opacity with its
+edge pixels solid white (`sprite(name, ghost=True)`), drawn under the solid
+car. On a clean link the two overlap and a thin white rim shows at the nose.
+Under UDP loss the ghost pulls ahead while snapshots are missing and snaps
+back when one arrives. The distance between them on screen is the real desync
+at 11 px per metre; it is never exaggerated. See
+`docs/screenshots/udp_loss30_*`.
 
 ### Telemetry panel
 
-Always visible, bottom right, styled like the rest. It must show: RTT (current,
-p50, p95), the retransmit timer, snapshots received per second, packets sent /
-received / lost, bytes per second up and down, time since the last ack,
-discarded stale snapshots, the desync in metres for each player in that
-player's accent, and input-to-acknowledgement latency. Where a transport cannot
-know a value (TCP hides loss, acks and its own timer), show a dash, never a zero.
+Always visible, bottom right. It must show: RTT (current, p50, p95), the
+retransmit timer, snapshots received per second, packets sent / received /
+lost, bytes per second up and down, time since the last ack, discarded stale
+snapshots, the desync in metres for each player in that player's colour, and
+input-to-acknowledgement latency. Where a transport cannot know a value (TCP
+hides loss, acks and its own timer), show `--`, never a zero. RTT, packets
+lost and stale snapshots are yellow: those are the numbers the comparison is
+about.
+
+## Sound
+
+`client/sound.py`. No audio files: each sound is a list of 16-bit samples
+built with the standard library's `array` module at start-up (about 0.2 s)
+and played by `pygame.mixer` at 22050 Hz mono. Hear them all with
+`python -m client.sound`.
+
+| Sound | When | How it is made |
+|---|---|---|
+| Engine | From the grid to the finish, our own car only | A looping sawtooth plus a square wave an octave below. One loop per whole press/second, 45 Hz at rest rising 9 Hz per press/second; the loop matching our current press rate plays, cross-fading over 40 ms. |
+| Press click | Each SPACE press that counted | 14 ms of 1200 Hz square wave. |
+| Countdown beep | Each of the first four lights going out | 440 Hz square, 140 ms. |
+| Go | The last light going out | 880 Hz square, 450 ms: one octave up. |
+| Stall | Our engine stalls | Sawtooth sliding from 320 Hz down to 70 Hz over 500 ms. |
+| Overtake | The race order changes | Two rising notes, 660 then 990 Hz. |
+| Finish | The round ends | C, E, G, high C. |
+| Bass line | While the round is running, **only with `--music`** | Sixteen eighth-notes in A minor, square wave, looped. |
+
+- **The engine is the key-press feedback:** its pitch follows our own press
+  rate, so the ear confirms every press. A press before the lights go out
+  does not count and makes no sound.
+- **Mute:** `--mute` starts silent. `M` toggles on the room, race and result
+  screens. On the sign-in and lobby screens `M` is a letter being typed, so it
+  does not toggle there. Sound is on by default.
+- **Music is opt-in:** the bass line is off unless the client is started with
+  `--music`. The engine, press click, countdown, stall, overtake and finish
+  sounds carry information about the race and stay on; the bass line carries
+  none, and three clients in one room would each loop it out of step.
+- **No audio device:** `pygame.mixer.init` is wrapped; if it fails the client
+  logs one warning and runs silent. (Checked with `SDL_AUDIODRIVER` set to a
+  driver that does not exist.)
+- **Never blocks:** the mixer plays on its own thread. Every call from the
+  game loop only starts or stops a sound and returns at once.
+- Sounds are decided in `App.update_sound()`, which compares the round with
+  what it was a frame earlier (lights out, stalled, order, finished).
+
+## Performance
+
+Measured on the development laptop (Windows 11, Python 3.14, pygame-ce 2.5.8)
+by timing every frame of `App.run()` through one real round on 127.0.0.1:
+three cars, parallax, ladder slides, a stall with smoke, sound on.
+
+| Run | Frames | Draw cost per frame, mean / p99 | Frame rate held |
+|---|---|---|---|
+| arcade, UDP | 681 | 2.0 ms / 2.6 ms | 60.0 fps |
+| arcade, UDP, 30% loss | 679 | 2.0 ms / 2.6 ms | 59.9 fps |
+| arcade, TCP | 681 | 2.0 ms / 2.6 ms | 60.0 fps |
+| broadcast, UDP | 681 | 4.7 ms / 5.6 ms | 60.0 fps |
+
+A frame has a 16.7 ms budget, so the arcade skin uses about an eighth of it.
+Across the arcade runs one frame took 138 ms (once, cause not found); nothing
+else exceeded 10 ms. The loop paces frames on a fixed 60 Hz timetable; between
+frames it keeps reading the socket about once a millisecond.
 
 ## Known rough edges
 
 Written to be argued with. Most important first.
 
 1. **Nobody has played it by hand yet.** Every screen was produced by a script
-   and judged from screenshots. Key feel, typing, paste and copy are unproven.
-2. **The ghost is too subtle.** It is a 1 px light outline. On a clean link it
-   reads as a faint border on the car; on a projector it may vanish. The solid
-   car and the ghost are both eased with the same constant, which softens the
-   "tear away and snap back" that the demo is supposed to show. First change:
-   make the ghost heavier (2 px, or a hatched fill) and ease it less than the
-   solid car, or not at all.
-3. **Pressing SPACE gives no feedback.** Nothing on screen acknowledges a key
-   press except the numbers changing. A press before the lights go out is
-   silently ignored. A short pulse on the car or the press counter would help.
-4. **Heat is hard to read.** The lane heat bar is 2 px high and 160 px wide,
-   with no mark for the stall point and no warning as it approaches. A stall is
-   signalled only by the word STALL and a dimmer car. The big heat readout
-   helps only for your own car.
-5. **The start lights are small and stay within the palette**, so they are
-   white, not red, and there is no "go" moment. They are easy to miss in the header.
-6. **The finish is flat.** The gap count-up finishes in about a third of a
-   second, too quick to read as "resolving". The cars just stop at the line.
-   The speed readout keeps showing the crossing speed after the finish.
-7. **The telemetry panel has no hierarchy.** Sixteen cells of equal weight.
-   RTT, loss and desync matter most for the demo and do not stand out. Its
-   values jump rather than ease. Counters over 9999 switch format (`12.3k`),
-   which changes their width.
-8. **Fixed 1280 x 720 window.** Not resizable, no fullscreen, no awareness of
-   display scaling. On a high-DPI laptop or a projector it may be small or blurred.
-9. **Long names overflow.** A 16-character name in the lane gutter runs into
-   the track. Names are not truncated or scaled anywhere.
-10. **The lobby and name screens are mostly empty**, and the text field's caret
-    and placeholder are positioned by eye. There is no mouse support, and the
-    room list cannot be selected from; you must type the code.
-11. **Sans text is drawn glyph by glyph**, so it has no kerning. It shows in
-    titles such as a room name.
-12. **Easing is per frame, not per second.** At a frame rate other than 60 the
-    motion speeds up or slows down.
-13. **A two-player match leaves the third lane as blank space.**
-14. **Error text comes straight from the server** and is shown as an upper-case
-    caption for 6 seconds. It is accurate but not friendly.
-15. **The inverted QR is unverified.** Some phone scanners cannot read
-    light-on-dark codes. The module size is rounded to whole pixels, so the
-    code is slightly smaller than its 200 px box.
-16. **Performance is unmeasured on slow machines.** Each frame scales a
-    2560 x 1440 surface. While a frame is being drawn the network is not read,
-    which adds a few milliseconds to the RTT the panel shows (p95 5..11 ms on
-    loopback, against a p50 of 2 ms).
-17. **Hairlines at 12% may disappear on a projector.** Check on the demo
-    hardware before the day.
+   driving the real window and judged from screenshots. Key feel, typing,
+   paste, copy and the `M` key are unproven by a person.
+2. **Nobody has listened to the sound critically.** The sounds were generated
+   and played without error on one laptop; their balance (engine against bass
+   line against clicks) was not tuned by ear. With `--music`, three clients in
+   one room play three bass lines that are not in step.
+3. **The ghost is only as visible as the desync is large.** On loopback with
+   30% loss it reaches 1.5 to 3 m (16 to 33 px) and is obvious. On a clean
+   link it is a white rim a few pixels wide. Both cars are eased by the same
+   constant, which softens the snap back.
+4. **The wheels do not turn.** The pack has one frame per car. Motion comes
+   from the bob, the speed lines and the scenery.
+5. **The engine pitch moves in steps** of one press/second, cross-faded. A
+   slow change of rate is heard as steps, not a glide.
+6. **The overtake sound is the same** whether we gained or lost the place.
+7. **Text at sizes 8 and 16 has smaller pixels than the sprites.** A purist
+   will see two pixel sizes. Size 8 captions may be hard to read on a
+   projector; check on the demo hardware.
+8. **Long names are cut**, to 10 characters in the ladder and on name tags and
+   to 6 in the desync captions. Two names with the same first 6 letters look
+   alike there.
+9. **Cars far behind the leader leave the track view.** More than about 54 m
+   back, a car is only in the ladder.
+10. **Name tags and the start-light panel can overlap** scenery text such as
+    the distance over a gantry.
+11. **The dim leading zeros keep their black shadow**, so they read as
+    outlined digits rather than faint ones.
+12. **Fixed 1280 x 720 window.** Not resizable, no fullscreen, no awareness of
+    display scaling.
+13. **Easing is per frame, not per second.** At a frame rate other than 60 the
+    motion speeds up or slows down. The ladder slide and the smoke use the
+    clock and are not affected.
+14. **No mouse support**; the room list cannot be selected from.
+15. **Error text comes straight from the server**, shown for 6 seconds.
+16. **The QR has not been scanned with a phone.** It is now black on white
+    with a quiet zone, which is the form scanners expect, but it is untested.
+17. **The broadcast skin's rough edges are unchanged** (thin ghost outline,
+    small heat bar, white start lights). It has sound but no position ladder.
 
-Screenshots of every screen are in `docs/screenshots/`: `udp_*` and `tcp_*` on
-a clean link, `udp_loss30_*` with 30% of server-to-client datagrams dropped.
-Regenerate them after a visual change with `python -m tools.screenshots`
-(see the top of `tools/screenshots.py`).
+## Broadcast skin and the fallback rule
+
+`--skin broadcast` is the earlier design: background `#0D0F12`, foreground
+`#E8EAED`, accents `#4C8DD9` / `#D98A4C` / `#5FB88F`, Space Grotesk captions,
+JetBrains Mono numerals, everything drawn at 2x and scaled down with
+`smoothscale`, cars as flat shapes with a 1 px outline ghost. Its functions
+are the `draw_*` half of `screens.py`; the arcade ones are `arcade_*`.
+
+It exists so that a problem with the arcade skin on demo hardware costs one
+command-line flag, not the demo. Keep both working: a new piece of information
+on screen is added to both skins.
+
+## Screenshots
+
+`docs/screenshots/` holds every screen in the arcade skin: `udp_*` and `tcp_*`
+on a clean link, `udp_loss30_*` with 30% of server-to-client datagrams
+dropped. Regenerate them after a visual change with
+`python -m tools.screenshots` (see the top of `tools/screenshots.py`).

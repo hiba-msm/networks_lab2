@@ -28,7 +28,7 @@ wrong even if every test passes.
 1. **Raw standard-library `socket` only.** No websockets, no HTTP, no asyncio
    frameworks, no networking libraries, no game-networking libraries.
    `threading` and `selectors` are allowed. The only third-party packages are
-   `pygame-ce` (window), `qrcode` (lobby QR) and `matplotlib` (report charts).
+   `pygame-ce` (window and sound), `qrcode` (lobby QR) and `matplotlib` (report charts).
 2. **The UDP reliability layer is ours and is the graded artifact.** It lives in
    `transport/udp_transport.py`. Never replace it with a library. Never
    "simplify" it away, and never route UDP traffic around it.
@@ -57,9 +57,10 @@ server/      server.py     login, sessions, lobby, the 30 Hz loop, disconnects
              room.py       one room: members and the round/match state machine
              __main__.py   command line; the only server file naming a transport
 client/      core.py       headless client: connection, state, prediction, telemetry
-             theme.py      palette, fonts, the 2x canvas
-             screens.py    what each screen draws
-             app.py        window, keyboard, which screen is showing
+             theme.py      palettes, fonts, sprite loading, the canvas (both skins)
+             screens.py    what each screen draws: draw_* (broadcast skin), arcade_* (arcade skin)
+             sound.py      every sound, generated at start-up; no audio files
+             app.py        window, keyboard, which screen is showing, when a sound plays
              __main__.py   command line; the only client file naming a transport
 tests/       test_common.py  protocol and rules (no network)
              test_server.py  end to end over real sockets, both transports
@@ -67,7 +68,8 @@ tests/       test_common.py  protocol and rules (no network)
 tools/       heat_sim.py     balance table for the engine-heat mechanic
              screenshots.py  plays a real match and regenerates docs/screenshots/
 preflight.py   pre-demo checks, local and against a public server
-assets/fonts/  Space Grotesk, JetBrains Mono, and their OFL licences
+assets/fonts/    Press Start 2P (arcade), Space Grotesk, JetBrains Mono (broadcast), OFL licences
+assets/sprites/  ten sprites from Kenney's Pixel Vehicle Pack (CC0), and its licence
 docs/          protocol.md, design.md, screenshots/
 ```
 
@@ -77,7 +79,7 @@ docs/          protocol.md, design.md, screenshots/
 server/__main__, client/__main__  ->  transport/*  ->  transport/base  ->  common/
 server/server, server/room        ->  common/            (handed a transport object)
 client/core                       ->  common/            (handed a transport object)
-client/app, client/screens        ->  client/core, client/theme, common/
+client/app, client/screens        ->  client/core, client/theme, client/sound, common/
 ```
 
 `common/` imports nothing of ours. Nothing imports `server/` or `client/`
@@ -174,6 +176,9 @@ python -m server --transport udp --host 0.0.0.0 --port 5055
 python -m client --transport udp --host 127.0.0.1 --port 5055 --name Ada
 python -m client --transport tcp --host 127.0.0.1 --port 5055 --name Ada
 python -m client --transport udp --host 127.0.0.1 --event-mode     # the naive input design
+python -m client --transport udp --skin broadcast --mute           # the plain look, sound off
+python -m client --transport udp --music                           # adds the bass line (off by default)
+python -m client.sound                                             # plays every sound in turn
 
 # tests: run all three before saying anything works
 python -m tests.test_common          # protocol and rules, under a second
@@ -195,7 +200,12 @@ There is no bot client yet (see status). Until there is, a headless client is
 
 Client keys: ENTER confirms, ESC goes back. In a room, SPACE toggles ready,
 ENTER starts (creator, with 2 players), CTRL+C copies the invite. In a race,
-hammer SPACE.
+hammer SPACE. M toggles sound in the room, the race and the result (on the
+name and lobby screens M is a letter).
+
+The client has two skins, `--skin arcade` (default, pixel art) and
+`--skin broadcast` (the plain fallback). They differ in drawing only; see
+`docs/design.md`. Anything new on screen goes into both.
 
 ## Project status
 
@@ -212,18 +222,27 @@ Update this section as the last step of any work. Last updated: 2026-11-12.
   match, every kind of disconnect.
 - Client: headless core (clock sync, prediction, reconciliation, telemetry) and
   the pygame window (lobby, QR invite, start lights, ghost car, telemetry panel).
+- Arcade skin and sound, on branch `gui-arcade`, not merged into `main` yet:
+  sprite cars, three-layer parallax, position ladder, generated sound,
+  `--skin` and `--mute`. All three suites pass on the branch; a scripted match
+  ran in the real window on both transports at 60 fps (numbers in
+  `docs/design.md`). The frame loop now keeps a fixed 60 Hz timetable.
 - `preflight.py`, local and `--public-test`.
 
 **In progress**
-- A human has not yet played a full match by hand. The window was driven by a
-  script and checked from screenshots. Typing, CTRL+V and CTRL+C are untested
-  by hand.
+- A human has not yet played a full match by hand, in either skin. The window
+  was driven by a script and checked from screenshots. Typing, CTRL+V, CTRL+C
+  and M are untested by hand, and nobody has judged the sound by ear. Do this
+  on `gui-arcade` before merging it.
 - Heat balance is undecided. With the current 2 s stall, a steady 8 presses/s
   beats mashing at 9-10/s, so the best strategy is to avoid the mechanic.
   `python -m tools.heat_sim` shows the table; a shorter stall (about 1.2 s)
   makes one stall per round pay. Constants are unchanged until the team picks.
-- The inverted (light-on-dark) QR has not been scanned with a phone. If common
-  scanners cannot read it, switch to dark-on-light inside a small light panel.
+- The lobby QR has not been scanned with a phone. The arcade skin draws it
+  black on a white panel with a quiet zone; the broadcast skin still draws it
+  light-on-dark, which some scanners cannot read.
+- `preflight.py` does not check `assets/sprites/` or the Press Start 2P font
+  yet; a missing file would only show when the client starts.
 
 **Not started**
 - `bots/bot_client.py`: headless bot with scripted press patterns. It must run
