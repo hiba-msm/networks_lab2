@@ -2,7 +2,7 @@
 
 A 3-player button-mash drag race for our Computer Networks course. Each player
 hammers SPACE; the faster you press, the faster your car goes, but press too
-fast for too long and the engine overheats and stalls for two seconds. First
+fast for too long and the engine overheats and stalls for 1.2 seconds. First
 across the line wins the round; best of three rounds wins the match. The game
 exists twice, once over TCP and once over UDP with a reliability layer we wrote
 ourselves, sharing one implementation of the rules, so we can compare the two

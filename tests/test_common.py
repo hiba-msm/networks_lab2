@@ -137,7 +137,8 @@ def test_steady_pressing_finishes_on_time_without_stalling():
     assert abs(car.finish_time_ms - expected_ms) < 500  # the window takes 0.5 s to fill
 
 
-def test_mashing_overheats_and_stalls_for_two_seconds():
+def test_mashing_overheats_and_stalls_for_the_stall_time():
+    assert STALL_TICKS / TICK_RATE == 1.2, "a stall is 1.2 seconds"
     race = Race([1])
     total = 0
     while not race.cars[1].stalled:

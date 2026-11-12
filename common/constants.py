@@ -24,7 +24,10 @@ HEAT_THRESHOLD_RATE = 6.5    # presses/second above which the engine heats up
 HEAT_GAIN = 8.0              # heat % per second, per press/second above the threshold
 HEAT_COOL = 15.0             # heat % per second lost while at or below the threshold
 HEAT_MAX = 100.0
-STALL_TICKS = 2 * TICK_RATE  # a stall lasts 2 seconds; heat drains to 0 over the stall
+# 1.2 s, chosen with tools/heat_sim.py: mashing at 10 presses/second into one
+# stall then beats a careful 8/s by about half a second. At 2 s the careful
+# driver always won, so the best strategy was not to mash.
+STALL_TICKS = round(1.2 * TICK_RATE)  # 36 ticks; heat drains to 0 over the stall
 
 # --- Match -----------------------------------------------------------------
 ROOM_SIZE = 3
