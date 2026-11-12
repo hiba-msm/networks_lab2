@@ -1,6 +1,6 @@
-"""The window: keyboard in, pictures out. All game and network state lives in
-client/core.py; this file only decides which screen to show and turns keys into
-calls on the core.
+"""The window: keyboard in, pictures and sound out. All game and network state
+lives in client/core.py; this file only decides which screen to show, turns
+keys into calls on the core, and notices the moments that deserve a sound.
 """
 
 import logging
@@ -10,9 +10,10 @@ import pygame
 
 from client import screens
 from client.core import GameClient, now_ms
+from client.sound import Sound
 from client.theme import H, W, Canvas
 from common import protocol
-from common.constants import MAX_NAME_LEN, MAX_ROOM_NAME_LEN
+from common.constants import MAX_NAME_LEN, MAX_ROOM_NAME_LEN, PRESS_WINDOW_SECONDS
 
 log = logging.getLogger("client")
 
@@ -32,11 +33,17 @@ class TextField:
 
 
 class App:
-    def __init__(self, transport_class, transport_name, host, port, name="", event_mode=False):
+    def __init__(self, transport_class, transport_name, host, port, name="", event_mode=False,
+                 skin="arcade", mute=False):
         pygame.init()
         self.window = pygame.display.set_mode((W, H))
         pygame.display.set_caption("Drag Race")
-        self.canvas = Canvas(self.window)
+        # Each skin has its own set of screen functions in screens.py. Pixel
+        # art is drawn at 1x; the broadcast look is drawn at 2x and smoothed.
+        self.draw_prefix = "arcade_" if skin == "arcade" else "draw_"
+        self.canvas = Canvas(self.window, 1 if skin == "arcade" else 2)
+        self.sound = Sound(mute)
+        self.heard = {}            # what update_sound() saw last frame, to notice changes
         self.transport_class = transport_class
         self.transport_name = transport_name
         self.host, self.port = host, port
@@ -123,6 +130,9 @@ class App:
     def on_key(self, event, screen):
         c = self.client
         ctrl = event.mod & pygame.KMOD_CTRL
+        if event.key == pygame.K_m and screen in ("room", "race", "result"):
+            self.sound.toggle_mute()  # not on the name and lobby screens: there M is a letter to type
+            return
         active_field = {"name": self.name_field, "lobby": self.join_field}.get(screen)
         if active_field is not None and event.key == pygame.K_BACKSPACE:
             active_field.backspace()
@@ -152,7 +162,8 @@ class App:
                 self.say("invite copied")
         elif screen == "race":
             if event.key == pygame.K_SPACE:
-                c.press()
+                if c.press():  # a press before the lights go out does not count, and stays silent
+                    self.sound.play("press")
             elif event.key == pygame.K_ESCAPE:
                 c.leave_room()
         elif screen == "result":
@@ -193,14 +204,51 @@ class App:
                 self.shown_round = c.round
                 self.canvas.forget_eased()  # a new round: cars start from the line, not from where they were
 
+        self.update_sound()
         self.canvas.clear()
-        getattr(screens, "draw_" + self.screen())(self.canvas, self)
+        getattr(screens, self.draw_prefix + self.screen())(self.canvas, self)
         self.canvas.present()
 
+    def update_sound(self):
+        """Compare the round with what it was a frame ago and play what changed."""
+        c, sound = self.client, self.sound
+        r = c.round if c is not None and not c.lost else None
+        if r is None or (r.result is not None and self.heard.get("over")):
+            sound.engine(None)
+            sound.music(False)
+            return
+        if self.heard.get("round") is not r:
+            self.heard = {"round": r, "lights": 0, "stalled": False, "order": None, "over": False}
+        heard = self.heard
+        elapsed = c.server_now_ms() - r.start_at_ms
+        racing = elapsed >= 0 and r.result is None
+
+        # Lights: number i (0..4) goes out at -(4 - i) * LIGHT_STEP_MS, the last one at 0.
+        lights_out = min(5, max(0, int(elapsed // screens.LIGHT_STEP_MS) + 5))
+        if lights_out > heard["lights"]:
+            sound.play("go" if lights_out == 5 else "beep")
+        if r.car.stalled and not heard["stalled"]:
+            sound.play("stall")
+        order = screens.race_order(c)
+        if racing and heard["order"] is not None and order != heard["order"]:
+            sound.play("overtake")
+        if r.result is not None:
+            sound.play("finish")
+        heard.update(lights=lights_out, stalled=r.car.stalled, order=order, over=r.result is not None)
+
+        # Engine: idles on the grid, then follows our own press rate. Bass line: only while racing.
+        sound.engine(sum(r.car.window) / PRESS_WINDOW_SECONDS if racing else 0)
+        sound.music(racing)
+
     def run(self):
+        next_frame = time.monotonic()
         while self.running:
-            next_frame = time.monotonic() + 1 / 60
             self.frame()
+            # Frames are due on a fixed 60 Hz timetable. (Timing each frame from
+            # the moment the previous wait ended lets every late wake-up add up,
+            # and the rate sags to about 58.) After a long stall, such as the
+            # window being dragged, start a fresh timetable instead of catching up.
+            next_frame = max(next_frame + 1 / 60, time.monotonic())
             # Between frames, keep serving the network about once a millisecond.
             # Reading the socket only once per frame would add up to 16 ms to
             # every RTT sample and to every input we send.

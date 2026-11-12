@@ -21,7 +21,11 @@ parser.add_argument("--name", default="", help="pre-fills the name field")
 parser.add_argument("--event-mode", action="store_true",
                     help="send individual press events instead of the cumulative count "
                          "(the naive design, kept to show how it loses presses under packet loss)")
+parser.add_argument("--skin", choices=["arcade", "broadcast"], default="arcade",
+                    help="arcade: pixel art (default). broadcast: the plain timing-screen look")
+parser.add_argument("--mute", action="store_true", help="start with sound off (M toggles it in the game)")
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s", datefmt="%H:%M:%S")
-App(TRANSPORTS[args.transport], args.transport.upper(), args.host, args.port, args.name, args.event_mode).run()
+App(TRANSPORTS[args.transport], args.transport.upper(), args.host, args.port, args.name, args.event_mode,
+    args.skin, args.mute).run()
